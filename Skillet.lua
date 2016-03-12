@@ -1128,7 +1128,7 @@ function Skillet:SkilletShow()
 		self:HideAllWindows()
 		self:BlizzardTradeSkillFrame_Show()
 	else
-		if self:IsSupportedTradeskill(self.currentTrade) then
+		if self:IsSupportedTradeskill(self.currentTrade) and not IsAltKeyDown() then
 			self:InventoryScan()
 			self.tradeSkillOpen = true
 			DA.DEBUG(1,"SkilletShow: "..self.currentTrade)
