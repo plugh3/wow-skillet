@@ -1445,7 +1445,7 @@ function Skillet:SkilletShowWindow()
 		HideUIPanel(TradeSkillFrame)
 	end
 	if IsAltKeyDown() then
-		self.data.skillDB[self.currentTrade] = {}
+		--self.data.skillDB[self.currentTrade] = {}
 	end
 	if not self:RescanTrade() then
 		DA.DEBUG(0,"No headers, reset filter")
