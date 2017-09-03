@@ -50,7 +50,7 @@ DA.TraceShow = false
 DA.TraceLog = false
 DA.ProfileShow = false
 DA.DebugLog = {} -- Add to SavedVariables for debugging
-DA.MAXDEBUG = 2000
+DA.MAXDEBUG = 4000
 DA.DebugProfile = {} -- Add to SavedVariables for debugging
 DA.MAXPROFILE = 2000
 DA.STATUS_COLOR = "|c0033CCFF"
@@ -63,7 +63,7 @@ function DA.CHAT(text)
 end
 
 function DA.WARN(...)
-	if not DA.WarnLogging then return "" end
+	if not DA.WarnLog then return "" end
 	local text = ""
 	local comma = ""
 	for i = 1, select("#", ...), 1 do
@@ -155,9 +155,11 @@ function DA.DEBUG(...)
 	if (DA.DebugShow and level < dlevel) then
 		print(DA.DEBUG_COLOR..addonName..": "..text)
 	end
-	table.insert(DA.DebugLog,date().."(D"..level.."): "..text)
-	if (table.getn(DA.DebugLog) > DA.MAXDEBUG) then
-		table.remove(DA.DebugLog,1)
+	if (not DA.LogLevel or level < dlevel) then
+		table.insert(DA.DebugLog,date().."(D"..level.."): "..text)
+		if (table.getn(DA.DebugLog) > DA.MAXDEBUG) then
+			table.remove(DA.DebugLog,1)
+		end
 	end
 end
 
@@ -286,14 +288,22 @@ function DA.PLINK(text)
 	return nil
 end
 
+function DA.TABLE(text, tab)
+	if not DA.DebugShow then return "" end
+	if ViragDevTool_AddData then
+		ViragDevTool_AddData(tab, addonName..": "..text)
+	end
+end
+
 function DA.DebugAidsStatus()
 	print("WarnShow= "..tostring(DA.WarnShow)..", WarnLog= "..tostring(DA.WarnLog))
 	print("DebugShow= "..tostring(DA.DebugShow)..", DebugLogging= "..tostring(DA.DebugLogging)..", DebugLevel= "..tostring(DA.DebugLevel))
 	print("TraceShow= "..tostring(DA.TraceShow)..", TraceLog= "..tostring(DA.TraceLog))
 	print("ProfileShow= "..tostring(DA.ProfileShow))
 	print("TableDump= "..tostring(DA.TableDump))
-	print("#DebugLog= "..tostring(#DA.DebugLog))
-	print("#DebugProfile= "..tostring(#DA.DebugProfile))
+	print("LogLevel= "..tostring(DA.LogLevel))
+	print("#DebugLog= "..tostring(#DA.DebugLog).." ("..tostring(DA.MAXDEBUG)..")")
+	print("#DebugProfile= "..tostring(#DA.DebugProfile).." ("..tostring(DA.MAXPROFILE)..")")
 end
 
 --
