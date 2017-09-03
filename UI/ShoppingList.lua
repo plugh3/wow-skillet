@@ -44,12 +44,18 @@ local FrameBackdrop = {
 }
 
 local bankFrameOpen = false
-local bank                   -- Detailed contents of the bank.
+local bank = {}					-- Detailed contents of the bank.
+Skillet.bankBusy = false
+Skillet.bankQueue = {}
 
 local guildbankFrameOpen = false
-local guildbankQuery = 0     -- Need to wait until all the QueryGuildBankTab()s finish
-local guildbankOnce = true   -- but only indexGuildBank once for each OPENED
-local guildbank              -- Detailed contents of the guildbank
+Skillet.guildbank = {}			-- Detailed contents of the guildbank
+Skillet.guildQueue = {}
+Skillet.guildbankOnce = false	-- but only indexGuildBank once for each OPENED
+Skillet.guildbankText = false
+Skillet.guildBusy = false
+Skillet.guildTab = 0
+Skillet.guildText = 0
 
 -- Creates and sets up the shopping list window
 local function createShoppingListFrame(self)
@@ -104,6 +110,11 @@ local function createShoppingListFrame(self)
 	SkilletShowQueuesIncludeGuildText:SetText(L["Include guild"])
 	SkilletShowQueuesIncludeGuild:SetChecked(Skillet.db.char.include_guild)
 
+	if AuctionatorLoaded then
+		SkilletSHAuctionatorButton:Show()
+	else
+		SkilletSHAuctionatorButton:Hide()
+	end
 	-- The frame enclosing the scroll list needs a border and a background .....
 	local backdrop = SkilletShoppingListParent
 	backdrop:SetBackdrop(ControlBackdrop)
@@ -133,17 +144,15 @@ end
 function Skillet:ShoppingListButton_OnEnter(button)
 	local name, link, quality = self:GetItemInfo(button.id)
 	GameTooltip:SetOwner(button, "ANCHOR_TOPLEFT")
-	GameTooltip:SetHyperlink(link)
-	GameTooltip:Show()
-	if EnhTooltip and EnhTooltip.TooltipCall then
-		local quantity = button.count
-		EnhTooltip.TooltipCall(GameTooltip, name, link, quality, quantity)
+	if link then
+		GameTooltip:SetHyperlink(link)
 	end
+	GameTooltip:Show()
 	CursorUpdate(button)
 end
 
 function Skillet:ClearShoppingList(player)
-	DA.DEBUG(0,"ClearShoppingList(",player,")")
+	DA.DEBUG(0,"ClearShoppingList("..tostring(player)..")")
 	local playerList
 	if player then
 		playerList = { player }
@@ -153,10 +162,10 @@ function Skillet:ClearShoppingList(player)
 			table.insert(playerList, player)
 		end
 	end
-	DA.DEBUG(0,"clear shopping list for: "..(player or "all players"))
+	--DA.DEBUG(0,"clear shopping list for: "..(player or "all players"))
 	for i=1,#playerList,1 do
 		local player = playerList[i]
-		DA.DEBUG(1,"player: "..player)
+		--DA.DEBUG(1,"player: "..player)
 		self.db.realm.reagentsInQueue[player] = {}
 		self.db.realm.queueData[player] = {}
 		self.db.realm.inventoryData[player] = {}
@@ -166,7 +175,7 @@ function Skillet:ClearShoppingList(player)
 end
 
 function Skillet:GetShoppingList(player, includeGuildbank)
-	DA.DEBUG(0,"GetShoppingList("..tostring(player)..", "..tostring(includeGuildbank)..")")
+	--DA.DEBUG(0,"GetShoppingList("..tostring(player)..", "..tostring(includeGuildbank)..")")
 	self:InventoryScan()
 	if not Skillet.db.global.cachedGuildbank then
 		Skillet.db.global.cachedGuildbank = {}
@@ -182,7 +191,7 @@ function Skillet:GetShoppingList(player, includeGuildbank)
 			table.insert(playerList, player)
 		end
 	end
-	DA.DEBUG(0,"shopping list for: "..(player or "all players"))
+	--DA.DEBUG(0,"shopping list for: "..(player or "all players"))
 	local usedInventory = {}  -- only use the items from each player once
 	local curPlayer = self.currentPlayer
 	local usedGuild = {}
@@ -199,17 +208,17 @@ function Skillet:GetShoppingList(player, includeGuildbank)
 			usedInventory[player] = {}
 		end
 		local reagentsInQueue = self.db.realm.reagentsInQueue[player]
-		DA.DEBUG(1,"player: "..player)
+		--DA.DEBUG(1,"player: "..player)
 		if reagentsInQueue then
 			for id,count in pairs(reagentsInQueue) do
-			DA.DEBUG(2,"reagent: "..id.." x "..count)
+			--DA.DEBUG(2,"reagent: "..id.." x "..count)
 				local deficit = count -- deficit is usually negative
 				local numInBoth, numInBothCurrent, numGuildbank = 0,0,0
 				local _
 				if not usedInventory[player][id] then
 					numInBoth = self:GetInventory(player, id)
 				end
-				DA.DEBUG(2,"numInBoth= "..numInBoth)
+				--DA.DEBUG(2,"numInBoth= "..numInBoth)
 				if numInBoth > 0 then
 					usedInventory[player][id] = true
 				end
@@ -217,7 +226,7 @@ function Skillet:GetShoppingList(player, includeGuildbank)
 					if not usedInventory[curPlayer] then
 						numInBothCurrent = self:GetInventory(curPlayer, id)
 					end
-					DA.DEBUG(2,"numInBothCurrent= "..numInBothCurrent)
+					--DA.DEBUG(2,"numInBothCurrent= "..numInBothCurrent)
 					if numInBothCurrent > 0 then
 						usedInventory[curPlayer][id] = true
 					end
@@ -234,7 +243,7 @@ function Skillet:GetShoppingList(player, includeGuildbank)
 				-- only count guild bank items when not at the guild bank because
 				-- we might start using them.
 				if includeGuildbank and curGuild and not guildbankFrameOpen then
-					DA.DEBUG(2,"deficit=",deficit,"cachedGuildbank=",cachedGuildbank[curGuild][id],"usedGuild=",usedGuild[id])
+					--DA.DEBUG(2,"deficit=",deficit,"cachedGuildbank=",cachedGuildbank[curGuild][id],"usedGuild=",usedGuild[id])
 					local temp = -1 * math.min(deficit,0) -- calculate exactly how many are needed
 					deficit = deficit + cachedGuildbank[curGuild][id] - usedGuild[id]
 					usedGuild[id] = usedGuild[id] + temp  -- keep track how many have been used
@@ -260,7 +269,7 @@ end
 
 local function indexBank()
 	DA.DEBUG(0,"indexBank()")
--- bank contains detailed contents of each tab,slot which 
+-- bank contains detailed contents of each tab,slot which
 -- is only needed while the bank is open.
 --
 	bank = {}
@@ -290,36 +299,40 @@ local function indexGuildBank(tab)
 	--
 	-- Build a current view of the contents of the Guildbank (one tab at a time).
 	--
-	-- guildbank contains detailed contents of each tab,slot which 
+	-- guildbank contains detailed contents of each tab,slot which
 	-- is only needed while the guildbank is open.
 	--
-	-- cachedGuildbank is a count by item, usable (but not necessarily 
+	-- cachedGuildbank is a count by item, usable (but not necessarily
 	-- accurate) when the Guildbank is closed.
-	-- It is in db.global instead of db.realm because of connected realms 
-	-- This means it is broken if this account is in guilds on 
+	-- It is in db.global instead of db.realm because of connected realms
+	-- This means it is broken if this account is in guilds on
 	-- different realms (not connected) with the same name.
 	--
+	if tab == 0 then return end		-- Something is wrong, don't make it worse.
 	local guildName = GetGuildInfo("player")
 	local cachedGuildbank = Skillet.db.global.cachedGuildbank
 	local name, icon, isViewable, canDeposit, numWithdrawals, remainingWithdrawals = GetGuildBankTabInfo(tab);
-	DA.DEBUG(1,"indexGuildBank tab="..tab..", isViewable="..tostring(isViewable)..", numWithdrawals="..numWithdrawals)
-	if(isViewable and numWithdrawals~=0) then
-		for slot=1, MAX_GUILDBANK_SLOTS_PER_TAB or 98, 1 do
-			local item = GetGuildBankItemLink(tab, slot)
-			if item then
-				local _,count = GetGuildBankItemInfo(tab, slot)
-				local id = Skillet:GetItemIDFromLink(item)
-				if id then
-					table.insert(guildbank, {
-						["bag"]   = tab,
-						["slot"]  = slot,
-						["id"]  = id,
-						["count"] = count,
-					})
-					if not cachedGuildbank[guildName][id] then
-						cachedGuildbank[guildName][id] = 0
+	--DA.DEBUG(1,"indexGuildBank tab="..tab..", isViewable="..tostring(isViewable)..", canDeposit="..tostring(canDeposit)..", numWithdrawals="..tostring(numWithdrawals)..", remainingWithdrawals="..tostring(remainingWithdrawals))
+	if isViewable then
+		if numWithdrawals~=0 then
+			for slot=1, MAX_GUILDBANK_SLOTS_PER_TAB or 98, 1 do
+				local item = GetGuildBankItemLink(tab, slot)
+				--DA.DEBUG(2,"  tab= "..tostring(tab)..", slot= "..tostring(slot)..", item= "..tostring(item))
+				if item then
+					local _,count = GetGuildBankItemInfo(tab, slot)
+					local id = Skillet:GetItemIDFromLink(item)
+					if id then
+						table.insert(Skillet.guildbank, {
+							["bag"]   = tab,
+							["slot"]  = slot,
+							["id"]  = id,
+							["count"] = count,
+						})
+						if not cachedGuildbank[guildName][id] then
+							cachedGuildbank[guildName][id] = 0
+						end
+						cachedGuildbank[guildName][id] = cachedGuildbank[guildName][id] + count
 					end
-					cachedGuildbank[guildName][id] = cachedGuildbank[guildName][id] + count
 				end
 			end
 		end
@@ -331,7 +344,6 @@ function Skillet:indexAllGuildBankTabs()
 	for tab=1, numTabs, 1 do
 		indexGuildBank(tab)
 	end
-	guildbankFrameOpen = true
 end
 
 -- Called when the bank frame is opened
@@ -359,19 +371,26 @@ function Skillet:BANKFRAME_CLOSED()
 	self:HideShoppingList()
 end
 
+-- Event fired when the guildbank is opened. Contents of the guildbank are not yet known.
+-- Query the server for the text associated with the first tab.
+-- The remaining texts will be queried in the event GUILDBANK_UPDATE_TEXT.
+-- When all the tabs have been queried, the event GUILDBANK_UPDATE_TEXT will query for contents.
 function Skillet:GUILDBANKFRAME_OPENED()
 	DA.DEBUG(0,"GUILDBANKFRAME_OPENED")
-	guildbankQuery = 0
-	guildbankOnce = true
+	guildbankFrameOpen = true
+	Skillet.guildbankText = true
+	Skillet.guildbankOnce = false
 	Skillet.guildBusy = false
+	Skillet.guildText = 1
+	Skillet.guildTab = 1
 	Skillet.guildQueue = {}
-	guildbank = {}
+	Skillet.guildbank = {}
 	local guildName = GetGuildInfo("player")
 	Skillet.db.global.cachedGuildbank[guildName] = {}
-	local numTabs = GetNumGuildBankTabs()
-	for tab=1, numTabs, 1 do
-		QueryGuildBankTab(tab)  -- event GUILDBANKBAGSLOTS_CHANGED will fire when the data is available
-	end
+	QueryGuildBankText(Skillet.guildText)  -- event GUILDBANK_UPDATE_TEXT will fire when the data is available
+end
+
+function Skillet:guildbankQueryComplete()
 	if not self.db.profile.display_shopping_list_at_guildbank then
 		return
 	end
@@ -468,26 +487,26 @@ local function getItemFromBank(itemID, bag, slot, count)
 	local num_moved = 0
 	if available then
 		if available == 1 or count >= available then
-			DA.DEBUG(1,"PickupContainerItem(",bag,", ", slot,")")
+			--DA.DEBUG(1,"PickupContainerItem(",bag,", ", slot,")")
 			PickupContainerItem(bag, slot)
 			num_moved = available
 		else
-			DA.DEBUG(1,"SplitContainerItem(",bag, slot, count,")")
+			--DA.DEBUG(1,"SplitContainerItem(",bag, slot, count,")")
 			SplitContainerItem(bag, slot, count)
 			num_moved = count
 		end
 		local tobag, toslot = findBagForItem(itemID, num_moved)
-		DA.DEBUG(1,"tobag=", tobag, " toslot=", toslot, " findBagForItem(", itemID, num_moved,")")
+		--DA.DEBUG(1,"tobag=", tobag, " toslot=", toslot, " findBagForItem(", itemID, num_moved,")")
 		if not tobag then
 			Skillet:Print(L["Could not find bag space for"]..": "..GetContainerItemLink(bag, slot))
 			ClearCursor()
 			return 0
 		end
 		if tobag == 0 then
-			DA.DEBUG(1,"PutItemInBackpack()")
+			--DA.DEBUG(1,"PutItemInBackpack()")
 			PutItemInBackpack()
 		else
-			DA.DEBUG(1,"PutItemInBag(",ContainerIDToInventoryID(tobag),")")
+			--DA.DEBUG(1,"PutItemInBag(",ContainerIDToInventoryID(tobag),")")
 			PutItemInBag(ContainerIDToInventoryID(tobag))
 		end
 	end
@@ -502,22 +521,22 @@ local function getItemFromGuildBank(itemID, bag, slot, count)
 	local num_moved = 0
 	if available then
 		if available == 1 or count >= available then
-			DA.DEBUG(1,"PickupGuildBankItem(",bag, slot,")")
+			--DA.DEBUG(1,"PickupGuildBankItem(",bag, slot,")")
 			PickupGuildBankItem(bag, slot)
 			num_moved = available
 		else
-			DA.DEBUG(1,"SplitGuildBankItem(",bag, slot, count,")")
+			--DA.DEBUG(1,"SplitGuildBankItem(",bag, slot, count,")")
 			SplitGuildBankItem(bag, slot, count)
 			num_moved = count
 		end
 		local tobag, toslot = findBagForItem(itemID, num_moved)
-		DA.DEBUG(1,"tobag=", tobag, " toslot=", toslot, " findBagForItem(", itemID, num_moved,")")
+		--DA.DEBUG(1,"tobag=", tobag, " toslot=", toslot, " findBagForItem(", itemID, num_moved,")")
 		if not tobag then
 			Skillet:Print(L["Could not find bag space for"]..": "..GetGuildBankItemLink(bag, slot))
 			ClearCursor()
 			return 0
 		else
-			DA.DEBUG(1,"PickupContainerItem(",tobag, toslot,")")
+			--DA.DEBUG(1,"PickupContainerItem(",tobag, toslot,")")
 			PickupContainerItem(tobag, toslot) -- actually puts the item in the bag
 		end
 	end
@@ -528,10 +547,10 @@ end
 -- Called once to get things started and then is called after both
 -- BANK_UPDATE (subset of BAG_UPDATE) and BAG_UPDATE_DELAYED events have fired.
 local function processBankQueue(where)
-	DA.DEBUG(1,"processBankQueue("..where..")")
+	DA.DEBUG(0,"processBankQueue("..where..")")
 	local bankQueue = Skillet.bankQueue
 	if Skillet.bankBusy then
-		DA.DEBUG(1,"BANK_UPDATE and bankBusy")
+		--DA.DEBUG(1,"BANK_UPDATE and bankBusy")
 		while true do
 			local queueitem = table.remove(bankQueue,1)
 			if queueitem then
@@ -540,8 +559,8 @@ local function processBankQueue(where)
 				local v = queueitem["list"]
 				local i = queueitem["i"]
 				local item = queueitem["item"]
---				DA.DEBUG(3,"j=",j,", v=",DA.DUMP1(v))
---				DA.DEBUG(3,"i=",i,", item=",DA.DUMP1(item))
+				--DA.DEBUG(3,"j=",j,", v=",DA.DUMP1(v))
+				--DA.DEBUG(3,"i=",i,", item=",DA.DUMP1(item))
 				Skillet.gotBankEvent = false
 				Skillet.gotBagUpdateEvent = false
 				local moved = getItemFromBank(id, item.bag, item.slot, v.count)
@@ -560,10 +579,10 @@ end
 
 -- Subset of the BAG_UPDATE event processed in Skillet.lua
 -- It may look like a real Blizzard event but its not.
-function Skillet:BANK_UPDATE(event,bagID) 
-	DA.DEBUG(2,"BANK_UPDATE( "..tostring(bagID).." )")
+function Skillet:BANK_UPDATE(event,bagID)
+	--DA.DEBUG(0,"BANK_UPDATE( "..tostring(bagID).." )")
 	if Skillet.bankBusy then
-		DA.DEBUG(1, "BANK_UPDATE and bankBusy")
+		--DA.DEBUG(1, "BANK_UPDATE and bankBusy")
 		Skillet.gotBankEvent = true
 		if Skillet.gotBankEvent and Skillet.gotBagUpdateEvent then
 			processBankQueue("bank update")
@@ -574,7 +593,7 @@ end
 -- Called once to get things started and then is called after both
 -- GUILDBANKBAGSLOTS_CHANGED and BAG_UPDATE_DELAYED events have fired.
 local function processGuildQueue(where)
-	DA.DEBUG(1,"processGuildQueue("..where..")")
+	DA.DEBUG(0,"processGuildQueue("..where..")")
 	local guildQueue = Skillet.guildQueue
 	if Skillet.guildBusy then
 		while true do
@@ -585,8 +604,8 @@ local function processGuildQueue(where)
 				local v = queueitem["list"]
 				local i = queueitem["i"]
 				local item = queueitem["item"]
-				DA.DEBUG(2,"j=",j,", v=",DA.DUMP1(v))
-				DA.DEBUG(2,"i=",i,", item=",DA.DUMP1(item))
+				--DA.DEBUG(2,"j=",j,", v=",DA.DUMP1(v))
+				--DA.DEBUG(2,"i=",i,", item=",DA.DUMP1(item))
 				Skillet.gotGuildbankEvent = false
 				Skillet.gotBagUpdateEvent = false
 				local moved = getItemFromGuildBank(id, item.bag, item.slot, v.count)
@@ -603,31 +622,54 @@ local function processGuildQueue(where)
 	end
 end
 
+-- Event is fired when the guild bank tab text is available.
+-- Called as a result of a QueryGuildBankText call.
+-- When all the tabs have been queried, query for contents.
+function Skillet:GUILDBANK_UPDATE_TEXT(event)
+	if Skillet.guildbankText then
+		--DA.DEBUG(0,"GUILDBANK_UPDATE_TEXT and guildbankText")
+		Skillet.guildText = Skillet.guildText + 1
+		if Skillet.guildText > GetNumGuildBankTabs() then
+			Skillet.guildbankText = false
+			Skillet.guildbankOnce = true
+			QueryGuildBankTab(Skillet.guildTab)  -- event GUILDBANKBAGSLOTS_CHANGED will fire when the data is available
+			return
+		end
+		QueryGuildBankText(Skillet.guildText)  -- event GUILDBANK_UPDATE_TEXT will fire when the data is available
+	else
+		--DA.DEBUG(2,"GUILDBANK_UPDATE_TEXT")
+	end
+end
+
 -- Event is fired when the guild bank contents change.
 -- Called as a result of a QueryGuildBankTab call or as a result of a change in the guildbank's contents.
 function Skillet:GUILDBANKBAGSLOTS_CHANGED(event)
-	DA.DEBUG(2,"GUILDBANKBAGSLOTS_CHANGED")
-	if guildbankOnce then
-		guildbankQuery = guildbankQuery + 1
-		if guildbankQuery == GetNumGuildBankTabs() then
-			guildbankOnce = false
-			self:ScheduleTimer("indexAllGuildBankTabs", 0.5)
+	if Skillet.guildbankOnce then
+		--DA.DEBUG(0,"GUILDBANKBAGSLOTS_CHANGED and guildbankOnce")
+		indexGuildBank(Skillet.guildTab)
+		Skillet.guildTab = Skillet.guildTab + 1
+		if Skillet.guildTab > GetNumGuildBankTabs() then
+			Skillet.guildbankOnce = false
+			Skillet:guildbankQueryComplete()
+			return
 		end
-	end
-	if Skillet.guildBusy then
-		DA.DEBUG(1," GUILDBANKBAGSLOTS_CHANGED and guildBusy")
+		QueryGuildBankTab(Skillet.guildTab)  -- event GUILDBANKBAGSLOTS_CHANGED will fire when the data is available
+	elseif Skillet.guildBusy then
+		--DA.DEBUG(0,"GUILDBANKBAGSLOTS_CHANGED and guildBusy")
 		Skillet.gotGuildbankEvent = true
 		if Skillet.gotGuildbankEvent and Skillet.gotBagUpdateEvent then
 			processGuildQueue("guild bank")
 		end
+	else
+		--DA.DEBUG(2,"GUILDBANKBAGSLOTS_CHANGED")
 	end
 end
 
 -- Event is fired when the main bank (bagID == -1) contents change.
 function Skillet:PLAYERBANKSLOTS_CHANGED(event,slot)
-	DA.DEBUG(2,"PLAYERBANKSLOTS_CHANGED"..", slot="..tostring(slot))
+	--DA.DEBUG(0,"PLAYERBANKSLOTS_CHANGED"..", slot="..tostring(slot))
 	if Skillet.bankBusy then
-		DA.DEBUG(1,"PLAYERBANKSLOTS_CHANGED and bankBusy")
+		--DA.DEBUG(1,"PLAYERBANKSLOTS_CHANGED and bankBusy")
 		Skillet.gotBankEvent = true
 		if Skillet.gotBankEvent and Skillet.gotBagUpdateEvent then
 			processBankQueue("bag update")
@@ -637,9 +679,9 @@ end
 
 -- Event is fired when the reagent bank (bagID == -3) contents change.
 function Skillet:PLAYERREAGENTBANKSLOTS_CHANGED(event,slot)
-	DA.DEBUG(2,"PLAYERREAGENTBANKSLOTS_CHANGED"..", slot="..tostring(slot))
+	--DA.DEBUG(0,"PLAYERREAGENTBANKSLOTS_CHANGED"..", slot="..tostring(slot))
 	if Skillet.bankBusy then
-		DA.DEBUG(1,"PLAYERREAGENTBANKSLOTS_CHANGED and bankBusy")
+		--DA.DEBUG(1,"PLAYERREAGENTBANKSLOTS_CHANGED and bankBusy")
 		Skillet.gotBankEvent = true
 		if Skillet.gotBankEvent and Skillet.gotBagUpdateEvent then
 			processBankQueue("bag update")
@@ -650,20 +692,23 @@ end
 -- Event fires after all applicable BAG_UPDATE events for a specific action have been fired.
 -- It doesn't happen as often as BAG_UPDATE so its a better event for us to use.
 function Skillet:BAG_UPDATE_DELAYED(event)
-	DA.DEBUG(2,"BAG_UPDATE_DELAYED")
+	--DA.DEBUG(0,"BAG_UPDATE_DELAYED")
 	if Skillet.bankBusy then
-		DA.DEBUG(1,"BAG_UPDATE_DELAYED and bankBusy")
+		--DA.DEBUG(1,"BAG_UPDATE_DELAYED and bankBusy")
 		Skillet.gotBagUpdateEvent = true
 		if Skillet.gotBankEvent and Skillet.gotBagUpdateEvent then
 			processBankQueue("bag update")
 		end
 	end
 	if Skillet.guildBusy then
-		DA.DEBUG(1,"BAG_UPDATE_DELAYED and guildBusy")
+		--DA.DEBUG(1,"BAG_UPDATE_DELAYED and guildBusy")
 		Skillet.gotBagUpdateEvent = true
 		if Skillet.gotGuildbankEvent and Skillet.gotBagUpdateEvent then
 			processGuildQueue("bag update")
 		end
+	end
+	if Skillet.tradeSkillOpen then
+		Skillet.adjustInventory = true
 	end
 end
 
@@ -676,15 +721,15 @@ function Skillet:GetReagentsFromBanks()
 
 	-- Do things using a queue and events.
 	if bankFrameOpen then
-		DA.DEBUG(0,"#list=",#list)
+		--DA.DEBUG(0,"Bank #list=",#list)
 		local bankQueue = Skillet.bankQueue
 		for j,v in pairs(list) do
-			DA.DEBUG(2,"j=",j,", v=",DA.DUMP1(v))
+			--DA.DEBUG(2,"j=",j,", v=",DA.DUMP1(v))
 			local id = v.id
 			if incAlts or v.player == name then
 				for i,item in pairs(bank) do
 					if item.id == id then
-						DA.DEBUG(2,"i=",i,", item=",DA.DUMP1(item))
+						--DA.DEBUG(2,"i=",i,", item=",DA.DUMP1(item))
 						if item.count > 0 and v.count > 0 then
 							table.insert(bankQueue, {
 								["id"]    = id,
@@ -708,15 +753,15 @@ function Skillet:GetReagentsFromBanks()
 
 	-- Do things using a queue and events.
 	if guildbankFrameOpen then
-		DA.DEBUG(0,"#list=",#list)
+		--DA.DEBUG(0,"Guildbank #list=",#list)
 		local guildQueue = Skillet.guildQueue
 		for j,v in pairs(list) do
-			DA.DEBUG(2,"j=",j,", v=",DA.DUMP1(v))
+			--DA.DEBUG(2,"j=",j,", v=",DA.DUMP1(v))
 			local id = v.id
 			if incAlts or v.player == name then
-				for i,item in pairs(guildbank) do
+				for i,item in pairs(Skillet.guildbank) do
 					if item.id == id then
-						DA.DEBUG(2,"i=",i,", item=",DA.DUMP1(item))
+						--DA.DEBUG(2,"i=",i,", item=",DA.DUMP1(item))
 						if item.count > 0 and v.count > 0 then
 							table.insert(guildQueue, {
 								["id"]    = id,
@@ -773,15 +818,19 @@ local function get_button(i)
 end
 
 -- Called to update the shopping list window
-function Skillet:UpdateShoppingListWindow(use_cached_recipes)
-	DA.DEBUG(0,"UpdateShoppingListWindow(",use_cached_recipes,")")
+function Skillet:UpdateShoppingListWindow()
+	--DA.DEBUG(0,"UpdateShoppingListWindow()")
 	local num_buttons = 0
 	if not self.shoppingList or not self.shoppingList:IsVisible() then
 		return
 	end
-	if not use_cached_recipes then
-		cache_list(self)
+	if AuctionatorLoaded and AuctionFrame and AuctionFrame:IsVisible() then
+		SkilletSHAuctionatorButton:Show()
+	else
+		SkilletSHAuctionatorButton:Hide()
 	end
+
+	cache_list(self)
 	SkilletShoppingList:SetAlpha(self.db.profile.transparency)
 	SkilletShoppingList:SetScale(self.db.profile.scale)
 	local numItems = #self.cachedShoppingList
@@ -903,7 +952,6 @@ function Skillet:internal_DisplayShoppingList(atBank)
 	end
 	-- true == use cached recipes, we just loaded them after all
 	self:UpdateShoppingListWindow(true)
-	DA.TRACE("internal_DisplayShoppingList complete")
 end
 
 -- Hides the shopping list window
@@ -912,4 +960,30 @@ function Skillet:internal_HideShoppingList()
 		self.shoppingList:Hide()
 	end
 	self.cachedShoppingList = nil
+end
+
+function Skillet:AuctionatorShoppingList()
+	if not AuctionatorLoaded and not AuctionFrame and not AuctionFrame:IsVisible() then
+		return
+	end
+	local slist = self:GetShoppingList(Skillet.currentPlayer)
+	if not slist then
+		return
+	end
+	local BUY_TAB = 3;
+	Atr_SelectPane (BUY_TAB);
+	local items = {}
+	local shoppingListName = "Skillet Shopping List"
+	local reagentIndex
+	for reagentIndex = 1, #slist do
+		local reagentId = slist[reagentIndex].id
+		if (reagentId and not self:VendorSellsReagent(reagentId)) then
+			local reagentName = GetItemInfo(reagentId)
+			if (reagentName) then
+				table.insert (items, reagentName)
+				-- DA.DEBUG(0, "Reagent num "..reagentIndex.." ("..reagentId..") "..reagentName.." added")
+			end
+		end
+	end
+	Atr_SearchAH (shoppingListName, items)
 end

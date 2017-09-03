@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 -- Localization
 local L = LibStub("AceLocale-3.0"):GetLocale("Skillet")
+local PT = LibStub("LibPeriodicTable-3.1")
 
 local merchant_inventory = {}
 
@@ -54,12 +55,59 @@ local function update_merchant_inventory()
 		for i=1, count, 1 do
 			local link = GetMerchantItemLink(i)
 			if link then
-				local name, texture, price, quantity, numAvailable, isUsable = GetMerchantItemInfo(i)
+				local itemCount, itemTexture, itemValue, itemLink, currencyName, currencyID
+				local id = Skillet:GetItemIDFromLink(link)
+				local name, texture, price, quantity, numAvailable, isUsable, extendedCost = GetMerchantItemInfo(i)
+				if extendedCost then
+					itemCount = GetMerchantItemCostInfo(i)
+					if itemCount > 0 then
+						--DA.DEBUG(2,"itemCount for "..tostring(name).." ("..tostring(id)..")= "..tostring(itemCount))
+						itemTexture, itemValue, itemLink, currencyName = GetMerchantItemCostItem(i, 1)
+						if itemLink then
+							currencyName = GetItemInfo(itemLink)
+							currencyID = Skillet:GetItemIDFromLink(itemLink)
+						else
+							currencyID = -1 * tonumber(Skillet.currencyIDsByName[currencyName] or 0)
+						end
+						--DA.DEBUG(2,"Currency for "..tostring(name).." ("..tostring(id)..")= "..tostring(currencyName).." x "..tostring(itemValue))
+					end
+				end
 				if numAvailable == -1  then
-					local id = Skillet:GetItemIDFromLink(link)
-					merchant_inventory[id] = {}					-- TODO: record this info if PT doesn't already have it
+					merchant_inventory[id] = {}
 					merchant_inventory[id].price = price
-					merchant_inventory[id].stack = quantity
+					merchant_inventory[id].quantity = quantity
+					if Skillet.db.global.itemRecipeUsedIn[id] then		-- if this item is used in any recipes we know about then
+						if not Skillet:VendorSellsReagent(id) then		-- if its not a known vendor item then
+							if Skillet.db.global.MissingVendorItems[id] then
+								--DA.DEBUG(1,"updating "..tostring(name).." ("..tostring(id)..")")
+							else
+								--DA.DEBUG(1,"adding "..tostring(name).." ("..tostring(id)..")")
+							end
+							if itemCount and itemCount > 0 then
+								Skillet.db.global.MissingVendorItems[id] = {name or true, quantity, currencyName, currencyID, itemValue}		-- add it to our table
+							else
+								Skillet.db.global.MissingVendorItems[id] = name or true		-- add it to our table
+							end
+						else
+							--DA.DEBUG(1,"known "..tostring(name).." ("..tostring(id)..")")
+							if type(Skillet.db.global.MissingVendorItems[id]) == "table" then
+								if #Skillet.db.global.MissingVendorItems[id] ~= 5 then
+									Skillet.db.global.MissingVendorItems[id] = "Fix Me"
+								end
+							end
+						end
+						if Skillet.db.global.MissingVendorItems[id] then
+							if itemCount and itemCount > 0 and type(Skillet.db.global.MissingVendorItems[id]) ~= "table" then
+								--DA.DEBUG(1,"converting "..tostring(name).." ("..tostring(id)..")")
+								Skillet.db.global.MissingVendorItems[id] = {name or true, quantity, currencyName, currencyID, itemValue}		-- convert it
+							elseif PT then
+								if id~=0 and PT:ItemInSet(id,"Tradeskill.Mat.BySource.Vendor") then
+									--DA.DEBUG(1,"removing "..tostring(name).." ("..tostring(id)..")")
+									Skillet.db.global.MissingVendorItems[id] = nil		-- remove it from our table
+								end
+							end
+						end
+					end
 				end
 			end
 		end
@@ -78,16 +126,15 @@ local function update_merchant_buy_button()
 		SkilletMerchantBuyFrame:Hide()
 		return
 	end
+	if Skillet.db.profile.display_shopping_list_at_merchant then
+		Skillet:DisplayShoppingList(false)
+	end
 	if SkilletMerchantBuyFrame:IsVisible() then
 		-- already inserted the button
 		return
 	end
 	SkilletMerchantBuyFrameButton:SetText(L["Reagents"]);
-	if Skillet.wowVersion > 50000 then
-		SkilletMerchantBuyFrame:SetPoint("TOPLEFT", "MerchantFrame", "TOPLEFT" , 55, -5);
-	else
-		SkilletMerchantBuyFrame:SetPoint("TOPLEFT", "MerchantFrame", "TOPLEFT" , 60, -28);
-	end
+	SkilletMerchantBuyFrame:SetPoint("TOPLEFT", "MerchantFrame", "TOPLEFT" , 55, -5) -- May need to be adjusted for each WoW build
 	SkilletMerchantBuyFrame:SetFrameStrata("HIGH");
 	SkilletMerchantBuyFrame:Show();
 end
@@ -132,7 +179,6 @@ function Skillet:MERCHANT_UPDATE()
 	if Skillet.db.profile.vendor_buy_button or Skillet.db.profile.vendor_auto_buy then
 		update_merchant_inventory()
 	end
-	self:InventoryScan()						-- prolly not needed
 end
 
 -- Merchant window closed
@@ -140,7 +186,6 @@ function Skillet:MERCHANT_CLOSED()
 	remove_merchant_buy_button()
 	merchant_inventory = {}
 	self.autoPurchaseComplete = nil
-	self:InventoryScan()						-- prolly not needed
 end
 
 -- If at a vendor with the window open, buy anything that they
@@ -154,20 +199,20 @@ function Skillet:BuyRequiredReagents()
 	elseif not MerchantFrame or MerchantFrame:IsVisible() == false then
 		return
 	end
-	local totalspent = 0;
+	local totalspent = 0
+	local purchased = 0
 	local abacus = LibStub("LibAbacus-3.0")
-	local items_purchased = 0;
 	-- for each item they sell, see if we need it
 	-- ... if we do, buy the hell out of it.
-	local count = GetMerchantNumItems()
-	for i=1, count, 1 do
+	local numItems = GetMerchantNumItems()
+	for i=1, numItems, 1 do
 		local link = GetMerchantItemLink(i)
 		if link then
 			local name, texture, price, quantity, numAvailable, isUsable = GetMerchantItemInfo(i)
-			if numAvailable == -1 then
+			if numAvailable == -1 then -- Vendor has plenty.
 				local id = self:GetItemIDFromLink(link)
 				-- OK, lets see if we need it.
-				local count = 0;
+				local count = 0
 				for j=1,#list,1 do
 					if list[j].id == id then
 						count = list[j].count
@@ -175,46 +220,35 @@ function Skillet:BuyRequiredReagents()
 					end
 				end
 				if count > 0 then
-					local sName, sLink, iQuality, iLevel, iMinLevel, sType, sSubType, stackSize = GetItemInfo(link);
-					local itemstobuy = math.ceil(count/quantity);
-					if(stackSize == nil) then
-						for l=1, count, 1 do
-							-- XXX: need some error checking here in case the
-							-- poor user runs out of money.
-							BuyMerchantItem(i,1)
-						end
-					else
-						local fullstackstobuy    = math.floor(count/stackSize);
-						local fullstackitemcount = math.floor(stackSize/quantity);
-						local resttobuy          = math.ceil(count-(fullstackstobuy*stackSize));
-						if fullstackstobuy > 0 then
-							for l=1,fullstackstobuy,1 do
-								-- XXX: need some error checking here in case the
-								-- poor user runs out of money.
-								BuyMerchantItem(i,stackSize);
-							end
-						end
-						if resttobuy > 0 then
-							-- XXX: need some error checking here in case the
-							-- poor user runs out of money.
-							BuyMerchantItem(i,resttobuy);
+					purchased = 0;
+					count = math.ceil(count/quantity) * quantity	-- Merchant charges us full price for a partial stack, so round up.
+					local maxStack = GetMerchantItemMaxStack(i)
+					DA.DEBUG(0,"count= "..tostring(count)..", name= "..tostring(name)..", price= "..tostring(price)..", quantity= "..tostring(quantity)..", maxStack= "..tostring(maxStack))
+					while count > 0 do
+						if count <= maxStack then
+							BuyMerchantItem(i,count)
+							purchased = purchased + count
+							count = 0
+						else
+							BuyMerchantItem(i,maxStack)
+							purchased = purchased + maxStack
+							count = count - maxStack
 						end
 					end
-					items_purchased = items_purchased + 1
-					local itemspent = price * itemstobuy -- spent on this type of item
+					local itemspent = price * purchased / quantity -- spent on this type of item
 					totalspent = totalspent + itemspent  -- spent on all items from this merchant
 					local message = L["Purchased"]
 					local cash = abacus:FormatMoneyFull(itemspent, true);
-					message = message .. ": " .. (itemstobuy*quantity) .. " x "..GetMerchantItemLink(i).." (" .. cash .. ")";
+					message = message..": "..tostring(purchased).." x "..link.." ("..cash..")"
 					self:Print(message);
 				end
 			end
 		end
 	end
-	if totalspent > 0 and items_purchased > 1 then
+	if totalspent > 0 and purchased > 1 then
 		local message = L["Total spent"]
 		local cash = abacus:FormatMoneyFull(totalspent, true)
-		message = message .. ": " .. cash
+		message = message..": "..cash
 		self:Print(message)
 	end
 	self:InventoryScan()
@@ -231,7 +265,7 @@ function Skillet:MerchantBuyButton_OnEnter(button)
 	for i=1,#needList,1 do
 		local itemID = needList[i].id
 		if merchant_inventory[itemID] then
-			local cost = merchant_inventory[itemID].price * math.ceil(needList[i].count/merchant_inventory[itemID].stack)
+			local cost = merchant_inventory[itemID].price * math.ceil(needList[i].count / merchant_inventory[itemID].quantity)
 			totalCost = totalCost + cost
 			GameTooltip:AddDoubleLine((GetItemInfo(itemID)).." x "..needList[i].count, abacus:FormatMoneyFull(cost, true),1,1,0)
 		end
