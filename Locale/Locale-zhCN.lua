@@ -57,6 +57,10 @@ L["Collapse all groups"] = "收起所有分组"
 L["Config"] = "设定"
 L["CONFIGDESC"] = "显示Skillet的设定窗口"
 --Translation missing 
+L["CONFIRMQUEUECLEARDESC"] = "Use Alt-left-click instead of left-click to clear the queue"
+--Translation missing 
+L["CONFIRMQUEUECLEARNAME"] = "Use Alt-click to clear queue"
+--Translation missing 
 L["Copy"] = "Copy"
 L["Could not find bag space for"] = "背包无可用空格"
 L["craftable"] = "可制造"
@@ -122,6 +126,8 @@ L["Ignored Materials List"] = "Ignored Materials List"
 L["IGNORELISTDESC"] = "Open the Ignored Materials list frame."
 --Translation missing 
 L["Illusions"] = "Illusions"
+--Translation missing 
+L["in your inventory"] = "in your inventory"
 L["Include alts"] = "包括其他人物"
 --Translation missing 
 L["Include bank"] = "Include bank"

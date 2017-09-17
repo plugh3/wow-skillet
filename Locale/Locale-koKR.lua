@@ -51,6 +51,10 @@ L["Click to toggle favorite"] = "클릭으로 즐겨찾기 설정/제거"
 L["Collapse all groups"] = "모든 그룹 접음"
 L["Config"] = "설정"
 L["CONFIGDESC"] = "Skillet 설정을 엽니다."
+--Translation missing 
+L["CONFIRMQUEUECLEARDESC"] = "Use Alt-left-click instead of left-click to clear the queue"
+--Translation missing 
+L["CONFIRMQUEUECLEARNAME"] = "Use Alt-click to clear queue"
 L["Copy"] = "복사"
 L["Could not find bag space for"] = "가방에 빈공간이 없습니다."
 L["craftable"] = "제작 가능"
@@ -105,6 +109,8 @@ L["Ignored Materials List"] = "무시할 재료 목록"
 L["IGNORELISTDESC"] = "무시할 재료 목록 창을 엽니다."
 --Translation missing 
 L["Illusions"] = "Illusions"
+--Translation missing 
+L["in your inventory"] = "in your inventory"
 L["Include alts"] = "다른캐릭터 포함"
 L["Include bank"] = "은행 포함"
 L["Include guild"] = "길드 포함"

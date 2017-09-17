@@ -1,0 +1,11 @@
+------------------------------------------------------------------------
+r724 | bsmorgan | 2017-09-13 13:58:30 -0500 (Wed, 13 Sep 2017) | 3 lines
+Changed paths:
+   M /trunk/Skillet.lua
+   M /trunk/UI/MainFrame.lua
+
+Skillet:
+- Fix issue 504
+- Add number owned to recipe tooltip
+------------------------------------------------------------------------
+

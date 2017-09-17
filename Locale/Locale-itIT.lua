@@ -52,6 +52,10 @@ L["Collapse all groups"] = "Collassa tutti i gruppi"
 L["Config"] = "Configura"
 L["CONFIGDESC"] = "Apre la finestra di configurazione di Skillet"
 --Translation missing 
+-- L["CONFIRMQUEUECLEARDESC"] = ""
+--Translation missing 
+-- L["CONFIRMQUEUECLEARNAME"] = ""
+--Translation missing 
 -- L["Copy"] = ""
 L["Could not find bag space for"] = "Non trovo spazio nell borse per"
 L["craftable"] = "crabile"
@@ -117,6 +121,8 @@ L["Hide uncraftable"] = "Nascondi non creabili"
 -- L["IGNORELISTDESC"] = ""
 --Translation missing 
 -- L["Illusions"] = ""
+--Translation missing 
+-- L["in your inventory"] = ""
 L["Include alts"] = "Includi alt"
 --Translation missing 
 -- L["Include bank"] = ""
