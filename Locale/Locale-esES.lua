@@ -52,6 +52,10 @@ L["Collapse all groups"] = "Contraer todos los grupos"
 L["Config"] = "Configuración"
 L["CONFIGDESC"] = "Abre una ventana de configuración para Skillet"
 --Translation missing 
+L["CONFIRMQUEUECLEARDESC"] = "Use Alt-left-click instead of left-click to clear the queue"
+--Translation missing 
+L["CONFIRMQUEUECLEARNAME"] = "Use Alt-click to clear queue"
+--Translation missing 
 L["Copy"] = "Copy"
 L["Could not find bag space for"] = "No puedo encontrar un espacio en la bolsa para"
 L["craftable"] = "Manufacturable"
@@ -117,6 +121,8 @@ L["Ignored Materials List"] = "Ignored Materials List"
 L["IGNORELISTDESC"] = "Open the Ignored Materials list frame."
 --Translation missing 
 L["Illusions"] = "Illusions"
+--Translation missing 
+L["in your inventory"] = "in your inventory"
 L["Include alts"] = "Incluir Alts"
 --Translation missing 
 L["Include bank"] = "Include bank"

@@ -47,6 +47,10 @@ L["Click to toggle favorite"] = "Нажмите, чтобы переключит
 L["Collapse all groups"] = "Свернуть все группы"
 L["Config"] = "Настройки"
 L["CONFIGDESC"] = "Открыть окно настроек для Skillet"
+--Translation missing 
+L["CONFIRMQUEUECLEARDESC"] = "Use Alt-left-click instead of left-click to clear the queue"
+--Translation missing 
+L["CONFIRMQUEUECLEARNAME"] = "Use Alt-click to clear queue"
 L["Copy"] = "Копировать"
 L["Could not find bag space for"] = "Нет места в сумках для"
 L["craftable"] = "создаваемый"
@@ -95,6 +99,8 @@ L["Ignored Materials Clear"] = "Очистить список игнорируе
 L["Ignored Materials List"] = "Список игнорируемых материалов"
 L["IGNORELISTDESC"] = "Открыть список игнорируемых материалов."
 L["Illusions"] = "Иллюзии"
+--Translation missing 
+L["in your inventory"] = "in your inventory"
 L["Include alts"] = "Включать альтов"
 L["Include bank"] = "Включая банк"
 L["Include guild"] = "Включая гильдию"
